@@ -1,0 +1,36 @@
+# Build outputs
+*.exe
+*.dll
+*.so
+*.dylib
+*.syso
+rsrc_*.syso
+*.o
+*.a
+controller
+controller-*
+pyzanode-controller
+pyzanode-controller.exe
+
+# Embedded dashboard build artifacts (dashboard/ builds into controller/webui; keep index.html, ignore assets)
+webui/assets
+
+# Data dir when running from controller/ (local dev)
+.pyzanode/
+secrets.json
+nodes.json
+servers.json
+presets.json
+networks.json
+server_groups.json
+proxy_groups.json
+settings.json
+analytics_events.json
+player_analytics.json
+logs/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
