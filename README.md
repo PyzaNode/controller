@@ -12,7 +12,7 @@ go build -o pyzanode-controller .
 
 Cross-compile (e.g. Linux from Windows): `GOOS=linux GOARCH=amd64 go build -o pyzanode-controller .`
 
-To get the embedded dashboard, build the dashboard first (`cd dashboard && npm run build`), then build the controller. Or use the full build from repo root: `scripts/build-all.bat` / `scripts/build-all.sh` (see root [README](../README.md)).
+To get the embedded dashboard, build the dashboard first (`cd dashboard && npm run build`), then build the controller. Or use the full build from the directory that contains `scripts/` and the component repos: `scripts/build-all.bat` / `scripts/build-all.sh` (see [scripts/README](https://github.com/PyzaNode/scripts/blob/main/README.md)).
 
 ## Run
 
