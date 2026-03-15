@@ -30,4 +30,4 @@ First run creates the data dir (default `~/.pyzanode`), generates a token, and p
 
 ## License
 
-See the [PyzaNode](https://github.com/PyzaNode/PyzaNode) repo for the project license.
+See the [project license](https://github.com/PyzaNode/.github/blob/main/profile/LICENSE).
