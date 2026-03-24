@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -17,9 +18,17 @@ import (
 	"github.com/pyzanode/shared/debuglog"
 )
 
+// Set at link time: go build -ldflags "-X main.version=Beta-0.2.0" (see landing/VERSION + scripts/build-all.*).
+var version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "print version and exit")
 	webDir := flag.String("web", "", "path to built dashboard (e.g. web/dist) to use instead of embedded; default uses embedded build at /dashboard/")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	cfg := config.DefaultControllerConfig()
 	if *webDir != "" {
@@ -49,7 +58,7 @@ func main() {
 	debuglog.Enabled = st.GetSettings().DebugLogging
 
 	h := hub.New()
-	apiSvc := api.New(st, authSvc)
+	apiSvc := api.New(st, authSvc, version)
 	var embedWeb *fs.FS
 	if root, err := webUIRoot(); err == nil {
 		embedWeb = &root

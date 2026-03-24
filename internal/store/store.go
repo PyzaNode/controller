@@ -253,6 +253,8 @@ func (s *Store) NodeRegister(hostname, osName, address string) *types.Node {
 		}
 		n.Health = "healthy"
 		n.Alert = "" // clear alert on reconnect so owner sees fresh state
+		n.AgentVersion = ""
+		n.VersionAlert = ""
 		n.LastHeartbeat = time.Now()
 		_ = s.saveNodes()
 		return n
@@ -268,7 +270,23 @@ func (s *Store) NodeRegister(hostname, osName, address string) *types.Node {
 	return n
 }
 
-func (s *Store) NodeUpdateMetrics(id string, metrics *types.NodeMetrics) {
+// versionMismatchMessage returns stored agent version trim and a user-facing alert when agent != controller.
+func versionMismatchMessage(agentVer, ctrlVer string) (stored string, msg string) {
+	stored = strings.TrimSpace(agentVer)
+	ctrl := strings.TrimSpace(ctrlVer)
+	if ctrl == "" {
+		return stored, ""
+	}
+	if stored == "" {
+		return "", "This agent doesn't say what version it is (usually means it's old). Re-run install-agent.sh on this box so it matches the controller."
+	}
+	if stored != ctrl {
+		return stored, fmt.Sprintf("Agent is %s but the controller is %s. Re-run install-agent.sh or drop in a matching agent binary.", stored, ctrl)
+	}
+	return stored, ""
+}
+
+func (s *Store) NodeUpdateMetrics(id string, metrics *types.NodeMetrics, controllerVersion string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	n := s.nodes[id]
@@ -285,6 +303,9 @@ func (s *Store) NodeUpdateMetrics(id string, metrics *types.NodeMetrics) {
 	n.CPUUsageServers = metrics.CPUUsageServers
 	n.RAMUsageServers = metrics.RAMUsageServers
 	n.DebugEnabled = metrics.DebugEnabled
+	av, vAlert := versionMismatchMessage(metrics.AgentVersion, controllerVersion)
+	n.AgentVersion = av
+	n.VersionAlert = vAlert
 	n.LastHeartbeat = time.Now()
 	_ = s.saveNodes()
 }
@@ -1415,9 +1436,9 @@ func (s *Store) CleanupAnalytics() map[string]int {
 	_ = s.saveAnalyticsEvents()
 	_ = s.savePlayerAnalytics()
 	return map[string]int{
-		"events_removed":   removedEvents,
-		"players_removed":  removedPlayers,
-		"players_merged":   mergedPlayers,
+		"events_removed":    removedEvents,
+		"players_removed":   removedPlayers,
+		"players_merged":    mergedPlayers,
 		"events_remaining":  len(s.analytics),
 		"players_remaining": len(s.playerStats),
 	}

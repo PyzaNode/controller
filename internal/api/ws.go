@@ -107,7 +107,7 @@ func (a *API) HandleAgentWS(h *hub.Hub) http.HandlerFunc {
 				if err := json.Unmarshal(msg.Payload, &metrics); err != nil {
 					continue
 				}
-				a.store.NodeUpdateMetrics(node.ID, &metrics)
+				a.store.NodeUpdateMetrics(node.ID, &metrics, a.controllerVersion)
 				managedIDs := make(map[string]bool)
 				for _, s := range metrics.Servers {
 					managedIDs[s.ServerID] = true
@@ -122,7 +122,7 @@ func (a *API) HandleAgentWS(h *hub.Hub) http.HandlerFunc {
 					}
 					// Reconcile: agent doesn't have this server (container/process gone) → remove from dashboard.
 					// Only delete when status is "running" and missing from heartbeat. Do NOT delete "starting"
-					// servers—the agent may still be bringing the container up, so a heartbeat can arrive
+					// servers; the agent may still be bringing the container up, so a heartbeat can arrive
 					// before the server is in metrics.Servers, which would delete the record and leave an orphan container.
 					// Only reap servers that have been empty (PlayerCount==0) for a grace period, so we don't
 					// delete active sessions if a heartbeat misses a process briefly.
@@ -298,6 +298,7 @@ func appendServerLogLine(dataDir, serverID, line string) {
 	defer f.Close()
 	_, _ = f.WriteString(line + "\n")
 }
+
 // sendNtfy sends a simple text notification to an ntfy topic.
 // Auth: if token is set, use Bearer; else if username and password are set, use HTTP Basic.
 func sendNtfy(baseURL, topic, message, token, username, password string) {

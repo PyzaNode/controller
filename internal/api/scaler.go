@@ -299,9 +299,14 @@ func filterNodesForPreset(nodes []*types.Node, preset *types.Preset) []*types.No
 	}
 	var out []*types.Node
 	for _, n := range nodes {
-		if !nodeBusyBuildingPreset(n, preset.ID) {
-			out = append(out, n)
+		// Skip nodes that are currently downloading/building this preset image, or that have a Docker/daemon issue alert.
+		if nodeBusyBuildingPreset(n, preset.ID) {
+			continue
 		}
+		if nodeHasDockerIssue(n) {
+			continue
+		}
+		out = append(out, n)
 	}
 	return out
 }
@@ -323,4 +328,19 @@ func nodeBusyBuildingPreset(n *types.Node, presetID string) bool {
 		return false
 	}
 	return true
+}
+
+// nodeHasDockerIssue returns true if the node's last alert suggests Docker is missing or the daemon/API is unavailable.
+func nodeHasDockerIssue(n *types.Node) bool {
+	if n == nil || n.Alert == "" {
+		return false
+	}
+	alert := strings.ToLower(n.Alert)
+	if strings.Contains(alert, "docker is not installed or not running") {
+		return true
+	}
+	if strings.Contains(alert, "failed to connect to the docker api") {
+		return true
+	}
+	return false
 }

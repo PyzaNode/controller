@@ -26,11 +26,12 @@ import (
 )
 
 type API struct {
-	store     *store.Store
-	auth      *auth.Auth
-	hub       *hub.Hub
-	logStream *logstream.LogStream
-	scalerMu  sync.Mutex // prevents overlapping scaler runs and double-creates
+	store             *store.Store
+	auth              *auth.Auth
+	hub               *hub.Hub
+	logStream         *logstream.LogStream
+	controllerVersion string     // embedded controller release (ldflags); compared to agent heartbeats
+	scalerMu          sync.Mutex // prevents overlapping scaler runs and double-creates
 }
 
 type ctxKey string
@@ -48,17 +49,17 @@ func withPrincipal(r *http.Request, p *auth.Principal) *http.Request {
 	return r.WithContext(ctx)
 }
 
-func New(store *store.Store, auth *auth.Auth) *API {
-	return &API{store: store, auth: auth}
+func New(store *store.Store, auth *auth.Auth, controllerVersion string) *API {
+	return &API{store: store, auth: auth, controllerVersion: strings.TrimSpace(controllerVersion)}
 }
 
 // throttle SPA root logging: same client hitting GET / or /index.html repeatedly only logs once per window
 const spaLogThrottleWindow = 10 * time.Second
 
 var (
-	spaLogMu     sync.Mutex
-	spaLogLast   = map[string]time.Time{}
-	spaLogCount  = map[string]int{}
+	spaLogMu    sync.Mutex
+	spaLogLast  = map[string]time.Time{}
+	spaLogCount = map[string]int{}
 )
 
 func (a *API) logMiddleware(next http.Handler) http.Handler {
@@ -166,7 +167,6 @@ func (a *API) authMiddleware(next http.Handler) http.Handler {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	})
 }
-
 
 func (a *API) checkPermission(w http.ResponseWriter, r *http.Request, p *auth.Principal) bool {
 	path := r.URL.Path
@@ -697,13 +697,13 @@ func (a *API) SettingsGetAPIKey(w http.ResponseWriter, r *http.Request) {
 func (a *API) SettingsGetNotifications(w http.ResponseWriter, r *http.Request) {
 	st := a.store.GetSettings()
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"notify_on_crash":          st.NotifyOnCrash,
+		"notify_on_crash":           st.NotifyOnCrash,
 		"notify_on_node_disconnect": st.NotifyOnNodeDisconnect,
-		"ntfy_url":                 st.NtfyURL,
-		"ntfy_topic":               st.NtfyTopic,
-		"ntfy_token":               st.NtfyToken,
-		"ntfy_username":            st.NtfyUsername,
-		"ntfy_has_password":        st.NtfyPassword != "",
+		"ntfy_url":                  st.NtfyURL,
+		"ntfy_topic":                st.NtfyTopic,
+		"ntfy_token":                st.NtfyToken,
+		"ntfy_username":             st.NtfyUsername,
+		"ntfy_has_password":         st.NtfyPassword != "",
 	})
 }
 
@@ -841,10 +841,16 @@ func (a *API) NodesList(w http.ResponseWriter, r *http.Request) {
 			"cpu_usage_servers": n.CPUUsageServers, "ram_usage_servers": n.RAMUsageServers,
 			"running_count": n.RunningCount, "last_heartbeat": n.LastHeartbeat,
 			"debug_enabled": n.DebugEnabled,
-			"tags": n.Tags, "created_at": n.CreatedAt,
+			"tags":          n.Tags, "created_at": n.CreatedAt,
 		}
 		if n.Alert != "" {
 			m["alert"] = n.Alert
+		}
+		if n.VersionAlert != "" {
+			m["version_alert"] = n.VersionAlert
+		}
+		if n.AgentVersion != "" {
+			m["agent_version"] = n.AgentVersion
 		}
 		m["health"] = nodeHealth(n)
 		out = append(out, m)
@@ -868,10 +874,16 @@ func (a *API) NodeGet(w http.ResponseWriter, r *http.Request) {
 		"cpu_usage_servers": n.CPUUsageServers, "ram_usage_servers": n.RAMUsageServers,
 		"running_count": n.RunningCount, "last_heartbeat": n.LastHeartbeat,
 		"debug_enabled": n.DebugEnabled,
-		"tags": n.Tags, "created_at": n.CreatedAt,
+		"tags":          n.Tags, "created_at": n.CreatedAt,
 	}
 	if n.Alert != "" {
 		out["alert"] = n.Alert
+	}
+	if n.VersionAlert != "" {
+		out["version_alert"] = n.VersionAlert
+	}
+	if n.AgentVersion != "" {
+		out["agent_version"] = n.AgentVersion
 	}
 	out["health"] = nodeHealth(n)
 	writeJSON(w, http.StatusOK, out)
@@ -908,9 +920,9 @@ func (a *API) NodeUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		PublicHostname   *string `json:"public_hostname"`
-		Address          *string `json:"address"` // Local/LAN IP (e.g. 10.0.0.110) for proxies on same network
-		UsePublicHostname *bool  `json:"use_public_hostname"` // when false, proxies use address/hostname for this node's backends
+		PublicHostname    *string `json:"public_hostname"`
+		Address           *string `json:"address"`             // Local/LAN IP (e.g. 10.0.0.110) for proxies on same network
+		UsePublicHostname *bool   `json:"use_public_hostname"` // when false, proxies use address/hostname for this node's backends
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid body"})
@@ -943,6 +955,12 @@ func (a *API) NodeUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if n.Alert != "" {
 		out["alert"] = n.Alert
+	}
+	if n.VersionAlert != "" {
+		out["version_alert"] = n.VersionAlert
+	}
+	if n.AgentVersion != "" {
+		out["agent_version"] = n.AgentVersion
 	}
 	out["health"] = nodeHealth(n)
 	writeJSON(w, http.StatusOK, out)
